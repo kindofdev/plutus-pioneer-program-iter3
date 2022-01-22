@@ -17,6 +17,7 @@ import           Data.Map             as Map
 import           Data.Text            (Text)
 import           Data.Void            (Void)
 import           Plutus.Contract
+import qualified Plutus.Contract.Typed.Tx as Typed
 import qualified PlutusTx
 import           PlutusTx.Prelude     hiding (Semigroup(..), unless)
 import           Ledger               hiding (singleton)
@@ -29,26 +30,32 @@ import           Playground.Types     (KnownCurrency (..))
 import           Prelude              (IO, Semigroup (..), String, undefined)
 import           Text.Printf          (printf)
 
+
 {-# INLINABLE mkValidator #-}
 -- This should validate if and only if the two Booleans in the redeemer are equal!
 mkValidator :: () -> (Bool, Bool) -> ScriptContext -> Bool
-mkValidator _ _ _ = True -- FIX ME!
+mkValidator _ (b1, b2) _ = traceIfFalse "booleans-unequals" $ b1 == b2
 
 data Typed
 instance Scripts.ValidatorTypes Typed where
--- Implement the instance!
+    type instance DatumType Typed = ()
+    type instance RedeemerType Typed = (Bool, Bool)
 
 typedValidator :: Scripts.TypedValidator Typed
-typedValidator = undefined -- FIX ME!
+typedValidator = Scripts.mkTypedValidator @Typed
+    $$(PlutusTx.compile [|| mkValidator ||])
+    $$(PlutusTx.compile [|| wrap ||])
+  where
+    wrap = Scripts.wrapValidator @() @(Bool, Bool)
 
 validator :: Validator
-validator = undefined -- FIX ME!
+validator = Scripts.validatorScript typedValidator
 
 valHash :: Ledger.ValidatorHash
-valHash = undefined -- FIX ME!
+valHash = Scripts.validatorHash typedValidator
 
 scrAddress :: Ledger.Address
-scrAddress = undefined -- FIX ME!
+scrAddress = scriptAddress validator
 
 type GiftSchema =
             Endpoint "give" Integer
@@ -64,17 +71,15 @@ give amount = do
 grab :: forall w s e. AsContractError e => (Bool, Bool) -> Contract w s e ()
 grab bs = do
     utxos <- utxosAt scrAddress
-    let orefs   = fst <$> Map.toList utxos
-        lookups = Constraints.unspentOutputs utxos      <>
-                  Constraints.otherScript validator
-        tx :: TxConstraints Void Void
-        tx      = mconcat [mustSpendScriptOutput oref $ Redeemer $ PlutusTx.toBuiltinData bs | oref <- orefs]
-    ledgerTx <- submitTxConstraintsWith @Void lookups tx
+    let lookups = Constraints.unspentOutputs utxos      <>
+                  Constraints.typedValidatorLookups typedValidator
+        tx = Typed.collectFromScript utxos bs
+    ledgerTx <- submitTxConstraintsWith lookups tx
     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
     logInfo @String $ "collected gifts"
 
 endpoints :: Contract () GiftSchema Text ()
-endpoints = awaitPromise (give' `select` grab') >> endpoints
+endpoints = selectList [give', grab'] >> endpoints
   where
     give' = endpoint @"give" give
     grab' = endpoint @"grab" grab
