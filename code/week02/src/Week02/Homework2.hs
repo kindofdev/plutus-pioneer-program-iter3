@@ -11,6 +11,8 @@
 {-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE TypeOperators       #-}
 
+-- {-# LANGUAGE AllowAmbiguousTypes #-}
+
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
 module Week02.Homework2 where
@@ -34,7 +36,6 @@ import           Playground.TH        (mkKnownCurrencies, mkSchemaDefinitions)
 import           Playground.Types     (KnownCurrency (..))
 import           Prelude              (IO, Semigroup (..), String, undefined)
 import           Text.Printf          (printf)
-
 
 data MyRedeemer = MyRedeemer
     { flag1 :: Bool
@@ -90,11 +91,14 @@ grab r = do
     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
     logInfo @String $ "collected gifts"
 
-endpoints :: Contract () GiftSchema Text ()
-endpoints = selectList [give', grab'] >> endpoints
+endpoints :: AsContractError e => Contract () GiftSchema e ()
+endpoints = handleError handler (selectList [give', grab']) >> endpoints
   where
     give' = endpoint @"give" give
     grab' = endpoint @"grab" grab
+
+handler :: AsContractError e => e -> Contract w s e ()
+handler _ = logError @String "an error ocurred"
 
 mkSchemaDefinitions ''GiftSchema
 
