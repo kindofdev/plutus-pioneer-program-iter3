@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE DerivingStrategies  #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -10,13 +11,11 @@
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE TypeOperators       #-}
-
--- {-# LANGUAGE AllowAmbiguousTypes #-}
-
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
 module Week02.Homework2 where
 
+import           Control.Lens
 import           Control.Monad        hiding (fmap)
 import           Data.Aeson           (FromJSON, ToJSON)
 import           Data.Map             as Map
@@ -35,6 +34,7 @@ import           Playground.Contract  (printJson, printSchemas, ensureKnownCurre
 import           Playground.TH        (mkKnownCurrencies, mkSchemaDefinitions)
 import           Playground.Types     (KnownCurrency (..))
 import           Prelude              (IO, Semigroup (..), String, undefined)
+import qualified Prelude              as Haskell
 import           Text.Printf          (printf)
 
 data MyRedeemer = MyRedeemer
@@ -47,7 +47,7 @@ PlutusTx.unstableMakeIsData ''MyRedeemer
 {-# INLINABLE mkValidator #-}
 -- This should validate if and only if the two Booleans in the redeemer are equal!
 mkValidator :: () -> MyRedeemer -> ScriptContext -> Bool
-mkValidator _ MyRedeemer{..} _ = traceIfFalse "booleans-unequals" $ flag1 == flag2
+mkValidator _ MyRedeemer{..} _ = traceIfFalse "Wrong value for redeemer" $ flag1 == flag2
 
 data Typed
 instance Scripts.ValidatorTypes Typed where
@@ -92,13 +92,10 @@ grab r = do
     logInfo @String $ "collected gifts"
 
 endpoints :: AsContractError e => Contract () GiftSchema e ()
-endpoints = handleError handler (selectList [give', grab']) >> endpoints
+endpoints = selectList [give', grab'] >> endpoints
   where
     give' = endpoint @"give" give
     grab' = endpoint @"grab" grab
-
-handler :: AsContractError e => e -> Contract w s e ()
-handler _ = logError @String "an error ocurred"
 
 mkSchemaDefinitions ''GiftSchema
 
