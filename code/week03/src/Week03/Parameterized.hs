@@ -62,12 +62,19 @@ instance Scripts.ValidatorTypes Vesting where
     type instance DatumType Vesting = ()
     type instance RedeemerType Vesting = ()
 
+-- typedValidator :: VestingParam -> Scripts.TypedValidator Vesting
+-- typedValidator p = Scripts.mkTypedValidator @Vesting
+--     ($$(PlutusTx.compile [|| mkValidator ||]) `PlutusTx.applyCode` PlutusTx.liftCode p)
+--     $$(PlutusTx.compile [|| wrap ||])
+--   where
+--     wrap = Scripts.wrapValidator @() @()
+
 typedValidator :: VestingParam -> Scripts.TypedValidator Vesting
-typedValidator p = Scripts.mkTypedValidator @Vesting
-    ($$(PlutusTx.compile [|| mkValidator ||]) `PlutusTx.applyCode` PlutusTx.liftCode p)
+typedValidator = Scripts.mkTypedValidatorParam @Vesting
+    $$(PlutusTx.compile [|| mkValidator ||])
     $$(PlutusTx.compile [|| wrap ||])
-  where
-    wrap = Scripts.wrapValidator @() @()
+    where
+        wrap = Scripts.wrapValidator
 
 validator :: VestingParam -> Validator
 validator = Scripts.validatorScript . typedValidator
@@ -102,6 +109,31 @@ give gp = do
         (show $ gpBeneficiary gp)
         (show $ gpDeadline gp)
 
+-- grab' :: forall w s e. AsContractError e => POSIXTime -> Contract w s e ()
+-- grab' d = do
+--     now   <- currentTime
+--     pkh   <- ownPaymentPubKeyHash
+--     if now < d
+--         then logInfo @String $ "too early"
+--         else do
+--             let p = VestingParam
+--                         { beneficiary = pkh
+--                         , deadline    = d
+--                         }
+--             utxos <- utxosAt $ scrAddress p
+--             if Map.null utxos
+--                 then logInfo @String $ "no gifts available"
+--                 else do
+--                     let orefs   = fst <$> Map.toList utxos
+--                         lookups = Constraints.unspentOutputs utxos      <>
+--                                   Constraints.otherScript (validator p)
+--                         tx :: TxConstraints Void Void
+--                         tx      = mconcat [Constraints.mustSpendScriptOutput oref unitRedeemer | oref <- orefs] <>
+--                                   Constraints.mustValidateIn (from now)
+--                     ledgerTx <- submitTxConstraintsWith @Void lookups tx
+--                     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
+--                     logInfo @String $ "collected gifts"
+
 grab :: forall w s e. AsContractError e => POSIXTime -> Contract w s e ()
 grab d = do
     now   <- currentTime
@@ -117,21 +149,26 @@ grab d = do
             if Map.null utxos
                 then logInfo @String $ "no gifts available"
                 else do
-                    let orefs   = fst <$> Map.toList utxos
-                        lookups = Constraints.unspentOutputs utxos      <>
-                                  Constraints.otherScript (validator p)
-                        tx :: TxConstraints Void Void
-                        tx      = mconcat [Constraints.mustSpendScriptOutput oref unitRedeemer | oref <- orefs] <>
+                    let lookups = Constraints.unspentOutputs utxos <>
+                                  Constraints.typedValidatorLookups (typedValidator p)
+                        tx      = collectFromScript utxos () <>
                                   Constraints.mustValidateIn (from now)
-                    ledgerTx <- submitTxConstraintsWith @Void lookups tx
-                    void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
+                    utx  <- mkTxConstraints lookups tx              
+                    cTxId <- getCardanoTxId <$> submitUnbalancedTx (Constraints.adjustUnbalancedTx utx)
+                    void $ awaitTxConfirmed cTxId
                     logInfo @String $ "collected gifts"
 
+-- endpoints :: Contract () VestingSchema Text ()
+-- endpoints = awaitPromise (give' `select` grab') >> endpoints
+--   where
+--     give' = endpoint @"give" give
+--     grab' = endpoint @"grab" grab
+
 endpoints :: Contract () VestingSchema Text ()
-endpoints = awaitPromise (give' `select` grab') >> endpoints
+endpoints = selectList  [give', grab'] >> endpoints
   where
     give' = endpoint @"give" give
-    grab' = endpoint @"grab" grab
+    grab' = endpoint @"grab" grab    
 
 mkSchemaDefinitions ''VestingSchema
 

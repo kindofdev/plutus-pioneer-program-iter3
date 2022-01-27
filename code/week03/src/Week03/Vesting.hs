@@ -101,6 +101,31 @@ give gp = do
         (show $ gpBeneficiary gp)
         (show $ gpDeadline gp)
 
+-- grab :: forall w s e. AsContractError e => Contract w s e ()
+-- grab = do
+--     now   <- currentTime
+--     pkh   <- ownPaymentPubKeyHash
+--     utxos <- Map.filter (isSuitable pkh now) <$> utxosAt scrAddress
+--     if Map.null utxos
+--         then logInfo @String $ "no gifts available"
+--         else do
+--             let orefs   = fst <$> Map.toList utxos
+--                 lookups = Constraints.unspentOutputs utxos  <>
+--                           Constraints.otherScript validator
+--                 tx :: TxConstraints Void Void
+--                 tx      = mconcat [Constraints.mustSpendScriptOutput oref unitRedeemer | oref <- orefs] <>
+--                           Constraints.mustValidateIn (from now)
+--             ledgerTx <- submitTxConstraintsWith @Void lookups tx
+--             void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
+--             logInfo @String $ "collected gifts"
+--   where
+--     isSuitable :: PaymentPubKeyHash -> POSIXTime -> ChainIndexTxOut -> Bool
+--     isSuitable pkh now o = case _ciTxOutDatum o of
+--         Left _          -> False
+--         Right (Datum e) -> case PlutusTx.fromBuiltinData e of
+--             Nothing -> False
+--             Just d  -> beneficiary d == pkh && deadline d <= now
+
 grab :: forall w s e. AsContractError e => Contract w s e ()
 grab = do
     now   <- currentTime
@@ -109,14 +134,13 @@ grab = do
     if Map.null utxos
         then logInfo @String $ "no gifts available"
         else do
-            let orefs   = fst <$> Map.toList utxos
-                lookups = Constraints.unspentOutputs utxos  <>
-                          Constraints.otherScript validator
-                tx :: TxConstraints Void Void
-                tx      = mconcat [Constraints.mustSpendScriptOutput oref unitRedeemer | oref <- orefs] <>
+            let lookups = Constraints.unspentOutputs utxos <>
+                          Constraints.typedValidatorLookups typedValidator
+                tx      = collectFromScript utxos () <>
                           Constraints.mustValidateIn (from now)
-            ledgerTx <- submitTxConstraintsWith @Void lookups tx
-            void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
+            utx  <- mkTxConstraints lookups tx              
+            cTxId <- getCardanoTxId <$> submitUnbalancedTx (Constraints.adjustUnbalancedTx utx)
+            void $ awaitTxConfirmed cTxId           
             logInfo @String $ "collected gifts"
   where
     isSuitable :: PaymentPubKeyHash -> POSIXTime -> ChainIndexTxOut -> Bool
@@ -124,10 +148,16 @@ grab = do
         Left _          -> False
         Right (Datum e) -> case PlutusTx.fromBuiltinData e of
             Nothing -> False
-            Just d  -> beneficiary d == pkh && deadline d <= now
+            Just d  -> beneficiary d == pkh && deadline d <= now            
+
+-- endpoints :: Contract () VestingSchema Text ()
+-- endpoints = awaitPromise (give' `select` grab') >> endpoints
+--   where
+--     give' = endpoint @"give" give
+--     grab' = endpoint @"grab" $ const grab
 
 endpoints :: Contract () VestingSchema Text ()
-endpoints = awaitPromise (give' `select` grab') >> endpoints
+endpoints = selectList [give', grab'] >> endpoints
   where
     give' = endpoint @"give" give
     grab' = endpoint @"grab" $ const grab
