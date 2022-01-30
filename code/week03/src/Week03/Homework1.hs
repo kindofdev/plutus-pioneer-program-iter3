@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -28,6 +29,7 @@ import           Ledger.Constraints   (TxConstraints)
 import qualified Ledger.Constraints   as Constraints
 import qualified Ledger.Typed.Scripts as Scripts
 import           Ledger.Ada           as Ada
+import qualified Ledger.Interval      as Interval
 import           Playground.Contract  (printJson, printSchemas, ensureKnownCurrencies, stage, ToSchema)
 import           Playground.TH        (mkKnownCurrencies, mkSchemaDefinitions)
 import           Playground.Types     (KnownCurrency (..))
@@ -47,7 +49,14 @@ PlutusTx.unstableMakeIsData ''VestingDatum
 -- This should validate if either beneficiary1 has signed the transaction and the current slot is before or at the deadline
 -- or if beneficiary2 has signed the transaction and the deadline has passed.
 mkValidator :: VestingDatum -> () -> ScriptContext -> Bool
-mkValidator _ _ _ = False -- FIX ME!
+mkValidator VestingDatum{beneficiary1, beneficiary2, deadline} _ ScriptContext{scriptContextTxInfo=txInfo} =
+    let signedBy1  = txInfo `txSignedBy` unPaymentPubKeyHash beneficiary1
+        signedBy2  = txInfo `txSignedBy` unPaymentPubKeyHash beneficiary2
+        vr         = txInfoValidRange txInfo
+    in if deadline `Interval.after` vr
+        then traceIfFalse "tx unsigned by beneficiary 1" signedBy1
+        else traceIfFalse "tx unsigned by beneficiary 2" signedBy2
+
 
 data Vesting
 instance Scripts.ValidatorTypes Vesting where
@@ -129,6 +138,6 @@ endpoints = awaitPromise (give' `select` grab') >> endpoints
     give' = endpoint @"give" give
     grab' = endpoint @"grab" $ const grab
 
-mkSchemaDefinitions ''VestingSchema
+-- mkSchemaDefinitions ''VestingSchema
 
-mkKnownCurrencies []
+-- mkKnownCurrencies []
