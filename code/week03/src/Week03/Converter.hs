@@ -7,10 +7,10 @@ posixTimeToSlotTestnetConverter :: POSIXTime -> Slot
 posixTimeToSlotTestnetConverter time = slotWhenSlotChangedTo1Sec + posixTimeToEnclosingSlot testnetConf time
 
 timeWhenSlotChangedTo1Sec :: POSIXTime
-timeWhenSlotChangedTo1Sec = POSIXTime 1595967616000  -- 2020/07/28 20:19:56 - epoch:73 - slot:1598399 - block:1597132  
+timeWhenSlotChangedTo1Sec = POSIXTime 1595967616000  -- 2020/07/28 20:20:16 - epoch:74 - slot:1598400 - block:1597133  
 
 slotWhenSlotChangedTo1Sec :: Slot
-slotWhenSlotChangedTo1Sec = Slot 1598399
+slotWhenSlotChangedTo1Sec = Slot 1598400
 
 testnetConf :: SlotConfig
 testnetConf = SlotConfig 1000 timeWhenSlotChangedTo1Sec
