@@ -30,11 +30,18 @@ payContract :: Contract () PaySchema Text ()
 payContract = do
     pp <- awaitPromise $ endpoint @"pay" return
     let tx = mustPayToPubKey (ppRecipient pp) $ lovelaceValueOf $ ppLovelace pp
-    Contract.handleError errorHandler (void $ submitTx tx)
+    Contract.handleError (Contract.logError @Text) (void $ submitTx tx)
     payContract
 
-errorHandler :: Text -> Contract () PaySchema e () 
-errorHandler = Contract.logError
+-- payContract :: Contract () PaySchema Text ()
+-- payContract = do
+--     pp <- awaitPromise $ endpoint @"pay" return
+--     let tx = mustPayToPubKey (ppRecipient pp) $ lovelaceValueOf $ ppLovelace pp
+--     Contract.handleError errorHandler (void $ submitTx tx)
+--     payContract
+
+-- errorHandler :: Text -> Contract () PaySchema e () 
+-- errorHandler = Contract.logError
 
 -- A trace that invokes the pay endpoint of payContract on Wallet 1 twice, each time with Wallet 2 as
 -- recipient, but with amounts given by the two arguments. There should be a delay of one slot
