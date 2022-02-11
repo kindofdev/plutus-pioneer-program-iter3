@@ -15,6 +15,8 @@ library
                      , Week05.Homework2
                      , Week05.NFT
                      , Week05.Signed
+                     , Week05.WithCustomRedeemerTypes
+                     , Week05.WithCustomRedeemer
   build-depends:       aeson
                      , base ^>=4.14.1.0
                      , containers
