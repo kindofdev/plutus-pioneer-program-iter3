@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -25,13 +26,14 @@ import qualified PlutusTx
 import           PlutusTx.Prelude           hiding (Semigroup(..), unless)
 import           Ledger                     hiding (mint, singleton)
 import           Ledger.Constraints         as Constraints
+import           Ledger.Interval            (after)
 import           Ledger.TimeSlot
 import qualified Ledger.Typed.Scripts       as Scripts
 import           Ledger.Value               as Value
 import           Playground.Contract        (printJson, printSchemas, ensureKnownCurrencies, stage, ToSchema)
 import           Playground.TH              (mkKnownCurrencies, mkSchemaDefinitions)
 import           Playground.Types           (KnownCurrency (..))
-import           Prelude                    (IO, Semigroup (..), Show (..), String, undefined)
+import           Prelude                    (IO, Semigroup (..), Show (..), String, undefined, fromIntegral)
 import           Text.Printf                (printf)
 import           Wallet.Emulator.Wallet
 
@@ -39,13 +41,23 @@ import           Wallet.Emulator.Wallet
 -- This policy should only allow minting (or burning) of tokens if the owner of the specified PaymentPubKeyHash
 -- has signed the transaction and if the specified deadline has not passed.
 mkPolicy :: PaymentPubKeyHash -> POSIXTime -> () -> ScriptContext -> Bool
-mkPolicy pkh deadline () ctx = True -- FIX ME!
+mkPolicy pkh deadline () ScriptContext{scriptContextTxInfo = txInfo} = 
+    let signed             = txSignedBy txInfo $ unPaymentPubKeyHash pkh
+        vr                 = txInfoValidRange txInfo
+        deadlineNotReached = deadline `after` vr 
+    in traceIfFalse "" signed && 
+       traceIfFalse "" deadlineNotReached
 
 policy :: PaymentPubKeyHash -> POSIXTime -> Scripts.MintingPolicy
-policy pkh deadline = undefined -- IMPLEMENT ME!
+policy pkh deadline = mkMintingPolicyScript $
+    $$(PlutusTx.compile [|| \pkh' deadline' -> Scripts.wrapMintingPolicy $ mkPolicy pkh' deadline' ||])
+    `PlutusTx.applyCode`
+    PlutusTx.liftCode pkh
+    `PlutusTx.applyCode`
+    PlutusTx.liftCode deadline
 
 curSymbol :: PaymentPubKeyHash -> POSIXTime -> CurrencySymbol
-curSymbol pkh deadline = undefined -- IMPLEMENT ME!
+curSymbol pkh deadline= scriptCurrencySymbol $ policy pkh deadline 
 
 data MintParams = MintParams
     { mpTokenName :: !TokenName
@@ -65,7 +77,8 @@ mint mp = do
         else do
             let val     = Value.singleton (curSymbol pkh deadline) (mpTokenName mp) (mpAmount mp)
                 lookups = Constraints.mintingPolicy $ policy pkh deadline
-                tx      = Constraints.mustMintValue val <> Constraints.mustValidateIn (to $ now + 60000)
+                -- tx      = Constraints.mustMintValue val <> Constraints.mustValidateIn (to $ now + 60000)
+                tx      = Constraints.mustMintValue val <> Constraints.mustValidateIn (to $ deadline - fromIntegral (scSlotLength def))
             ledgerTx <- submitTxConstraintsWith @Void lookups tx
             void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
             Contract.logInfo @String $ printf "forged %s" (show val)
