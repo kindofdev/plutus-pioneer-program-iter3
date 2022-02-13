@@ -44,7 +44,9 @@ mkPolicy oref () ctx =
 
     checkMintedAmount :: Bool
     checkMintedAmount = case flattenValue (txInfoMint info) of
-        [(_, tn', amt)] -> tn' == TokenName emptyByteString && amt == 1
+        -- [(_, tn', amt)] -> tn' == TokenName emptyByteString && amt == 1  -- it works
+        -- [(_, tn', amt)] -> tn' == "" && amt == 1                            -- it doesn't work due to IsString implementation (no INLINABLE)
+        [(_, tn', amt)] -> tn' == TokenName "" && amt == 1
         _               -> False
 
 policy :: TxOutRef -> Scripts.MintingPolicy
