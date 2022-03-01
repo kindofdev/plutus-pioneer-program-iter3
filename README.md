@@ -47,6 +47,16 @@
  - [Part 5 - NFT's](https://youtu.be/2lKN0ZL_EQU)
  - [Part 6 - Homework](https://youtu.be/j7yT2OqGY6U)
 
+### [Lecture #6](https://www.youtube.com/playlist?list=PLNEK_Ejlx3x2sBWXHdFBRgkzPF6N-1LVi)
+
+ - [Part 1 - Introduction](https://youtu.be/TfWKxdli4eI)
+ - [Part 2 - The Minting Policy](https://youtu.be/w7_27sQIqkY)
+ - [Part 3 - Minting with the CLI](https://youtu.be/kfvzrC9J02k)
+ - [Part 4 - Deployment Scenarios](https://youtu.be/tW7uoY16gC0)
+ - [Part 5 - The Contracts](https://youtu.be/JgNhY_uuuGA)
+ - [Part 6 - Minting with the PAB](https://youtu.be/X6AyZIZ0vaE)
+ - [Part 7 - Summary](https://youtu.be/KmNOFltlRiA)
+
 ## Code Examples
 
  - Lecture #1: [English Auction](code/week01)
@@ -54,6 +64,7 @@
  - Lecture #3: [Script Contexts & Parameterized Contracts](code/week03)
  - Lecture #4: [Monads, Traces & Contracts](code/week04)
  - Lecture #5: [Native Tokens](code/week05)
+ - Lecture #6: [Deployment](code/week06)
 
 ## Exercises
 
@@ -96,6 +107,10 @@
 
   - Implement a Mary-era-style minting policy in the [Homework1](code/week05/src/Week05/Homework1.hs) module.
   - Fix the token name to the empty ByteString in the NFT contract in the [Homework2](code/week05/src/Week05/Homework2.hs) module.
+
+- Week #6
+
+  - Try to replicate what is done in the lecture - minting tokens with the `cardano-cli` and the PAB.
 
 ## Some Plutus Modules
 

@@ -18,6 +18,8 @@ library
                      , Week05.WithCustomRedeemerTypes
                      , Week05.WithCustomRedeemer
                      , Week05.MintAndValidatorAtomicity
+                     , Week05.Solution1
+                     , Week05.Solution2
   build-depends:       aeson
                      , base ^>=4.14.1.0
                      , containers
