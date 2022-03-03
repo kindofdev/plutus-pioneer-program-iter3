@@ -11,7 +11,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 
-module Week07.EvenOdd
+module Week07.EvenOddOriginal
     ( Game (..)
     , GameChoice (..)
     , FirstParams (..)
@@ -83,14 +83,9 @@ gameDatum md = do
     Datum d <- md
     PlutusTx.fromBuiltinData d
 
-{-# INLINABLE choiceToBuiltinByteString #-}
-choiceToBuiltinByteString :: GameChoice -> BuiltinByteString
-choiceToBuiltinByteString Zero = "0"
-choiceToBuiltinByteString One  = "1"
-
 {-# INLINABLE mkGameValidator #-}
-mkGameValidator :: Game -> GameDatum -> GameRedeemer -> ScriptContext -> Bool
-mkGameValidator game dat red ctx =
+mkGameValidator :: Game -> BuiltinByteString -> BuiltinByteString -> GameDatum -> GameRedeemer -> ScriptContext -> Bool
+mkGameValidator game bsZero' bsOne' dat red ctx =
     traceIfFalse "token missing from input" (assetClassValueOf (txOutValue ownInput) (gToken game) == 1) &&
     case (dat, red) of
         (GameDatum bs Nothing, Play c) ->
@@ -141,7 +136,12 @@ mkGameValidator game dat red ctx =
         Just d  -> d
 
     checkNonce :: BuiltinByteString -> BuiltinByteString -> GameChoice -> Bool
-    checkNonce bs nonce cSecond = sha2_256 (nonce `appendByteString` choiceToBuiltinByteString cSecond) == bs
+    checkNonce bs nonce cSecond = sha2_256 (nonce `appendByteString` cFirst) == bs
+      where
+        cFirst :: BuiltinByteString
+        cFirst = case cSecond of
+            Zero -> bsZero'
+            One  -> bsOne'
 
     nftToFirst :: Bool
     nftToFirst = assetClassValueOf (valuePaidTo info $ unPaymentPubKeyHash $ gFirst game) (gToken game) == 1
@@ -151,10 +151,16 @@ instance Scripts.ValidatorTypes Gaming where
     type instance DatumType Gaming = GameDatum
     type instance RedeemerType Gaming = GameRedeemer
 
+bsZero, bsOne :: BuiltinByteString
+bsZero = "0"
+bsOne  = "1"
+
 typedGameValidator :: Game -> Scripts.TypedValidator Gaming
 typedGameValidator game = Scripts.mkTypedValidator @Gaming
     ($$(PlutusTx.compile [|| mkGameValidator ||])
-        `PlutusTx.applyCode` PlutusTx.liftCode game)
+        `PlutusTx.applyCode` PlutusTx.liftCode game
+        `PlutusTx.applyCode` PlutusTx.liftCode bsZero
+        `PlutusTx.applyCode` PlutusTx.liftCode bsOne)
     $$(PlutusTx.compile [|| wrap ||])
   where
     wrap = Scripts.wrapValidator @GameDatum @GameRedeemer
@@ -208,8 +214,7 @@ firstGame fp = do
             }
         v    = lovelaceValueOf (fpStake fp) <> assetClassValue (gToken game) 1
         c    = fpChoice fp
-        -- bs   = sha2_256 $ fpNonce fp `appendByteString` if c == Zero then bsZero else bsOne
-        bs   = sha2_256 $ fpNonce fp `appendByteString` choiceToBuiltinByteString c
+        bs   = sha2_256 $ fpNonce fp `appendByteString` if c == Zero then bsZero else bsOne
         tx   = Constraints.mustPayToTheScript (GameDatum bs Nothing) v
     ledgerTx <- submitTxConstraints (typedGameValidator game) tx
     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx

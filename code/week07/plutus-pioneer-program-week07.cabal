@@ -14,6 +14,8 @@ library
                      , Week07.StateMachine
                      , Week07.TestEvenOdd
                      , Week07.TestStateMachine
+                     , Week07.EvenOddOriginal
+                     , Week07.EvenOddAlternative1
   build-depends:       aeson
                      , base ^>=4.14.1.0
                      , containers
