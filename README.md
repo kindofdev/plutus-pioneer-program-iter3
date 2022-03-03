@@ -57,6 +57,14 @@
  - [Part 6 - Minting with the PAB](https://youtu.be/X6AyZIZ0vaE)
  - [Part 7 - Summary](https://youtu.be/KmNOFltlRiA)
 
+### [Lecture #7](https://www.youtube.com/playlist?list=PLNEK_Ejlx3x3Y5xvAsVqq46S9xkHopSGU)
+
+ - [Part 1 - Introduction](https://youtu.be/CLOHdIGgy90)
+ - [Part 2 - Commit Schemes](https://youtu.be/JXKf1JwVAOE)
+ - [Part 3 - Implementation without State Machines](https://youtu.be/yczHkTzDnpk)
+ - [Part 4 - State Machines](https://youtu.be/7jiaQRA-wKI)
+ - [Part 5 - Homework](https://youtu.be/J0rD_hmsMVo)
+
 ## Code Examples
 
  - Lecture #1: [English Auction](code/week01)
@@ -65,6 +73,7 @@
  - Lecture #4: [Monads, Traces & Contracts](code/week04)
  - Lecture #5: [Native Tokens](code/week05)
  - Lecture #6: [Deployment](code/week06)
+ - Lecture #7: [State Machines](code/week07)
 
 ## Exercises
 
@@ -112,10 +121,15 @@
 
   - Try to replicate what is done in the lecture - minting tokens with the `cardano-cli` and the PAB.
 
+- Week #7
+  - Implement the game of "Rock, Paper, Scissors" using state machines.
+
 ## Some Plutus Modules
 
   - `Ledger.Scripts`, contains functions related to untyped Plutus scripts.
   - `Ledger.Typed.Scripts`, contains functions related to typed Plutus scripts.
+  - `Plutus.Contract`, contains definitions and functions for writing offchain code.
+  - `Plutus.Contract.StateMachine`, contains definitions and functions for working with _state machines_.
   - `Plutus.V1.Ledger.Ada`, contains definitions and functions related to _ADA_-values.
   - `Plutus.V1.Ledger.Interval`, contains the definition of intervals and functions for working with them.
   - `Plutus.V1.Ledger.Value`, contains definitions and functions related to _values_.
