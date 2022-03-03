@@ -83,9 +83,11 @@ gameDatum md = do
     Datum d <- md
     PlutusTx.fromBuiltinData d
 
+
+
 {-# INLINABLE mkGameValidator #-}
-mkGameValidator :: Game -> BuiltinByteString -> BuiltinByteString -> GameDatum -> GameRedeemer -> ScriptContext -> Bool
-mkGameValidator game bsZero' bsOne' dat red ctx =
+mkGameValidator :: Game -> GameDatum -> GameRedeemer -> ScriptContext -> Bool
+mkGameValidator game dat red ctx =
     traceIfFalse "token missing from input" (assetClassValueOf (txOutValue ownInput) (gToken game) == 1) &&
     case (dat, red) of
         (GameDatum bs Nothing, Play c) ->
@@ -140,8 +142,8 @@ mkGameValidator game bsZero' bsOne' dat red ctx =
       where
         cFirst :: BuiltinByteString
         cFirst = case cSecond of
-            Zero -> bsZero'
-            One  -> bsOne'
+            Zero -> bsZero
+            One  -> bsOne
 
     nftToFirst :: Bool
     nftToFirst = assetClassValueOf (valuePaidTo info $ unPaymentPubKeyHash $ gFirst game) (gToken game) == 1
@@ -151,16 +153,18 @@ instance Scripts.ValidatorTypes Gaming where
     type instance DatumType Gaming = GameDatum
     type instance RedeemerType Gaming = GameRedeemer
 
-bsZero, bsOne :: BuiltinByteString
+{-# INLINABLE bsZero #-}
+bsZero :: BuiltinByteString
 bsZero = "0"
+
+{-# INLINABLE bsOne #-}
+bsOne :: BuiltinByteString
 bsOne  = "1"
 
 typedGameValidator :: Game -> Scripts.TypedValidator Gaming
 typedGameValidator game = Scripts.mkTypedValidator @Gaming
     ($$(PlutusTx.compile [|| mkGameValidator ||])
-        `PlutusTx.applyCode` PlutusTx.liftCode game
-        `PlutusTx.applyCode` PlutusTx.liftCode bsZero
-        `PlutusTx.applyCode` PlutusTx.liftCode bsOne)
+        `PlutusTx.applyCode` PlutusTx.liftCode game)
     $$(PlutusTx.compile [|| wrap ||])
   where
     wrap = Scripts.wrapValidator @GameDatum @GameRedeemer
