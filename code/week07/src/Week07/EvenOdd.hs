@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude     #-}
+{-# LANGUAGE NumericUnderscores    #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TemplateHaskell       #-}
@@ -88,37 +89,45 @@ choiceToBuiltinByteString :: GameChoice -> BuiltinByteString
 choiceToBuiltinByteString Zero = "0"
 choiceToBuiltinByteString One  = "1"
 
+{-# INLINABLE player1Deposit #-}
+player1Deposit :: Integer
+player1Deposit = Ada.getLovelace minAdaTxOut
+
 {-# INLINABLE mkGameValidator #-}
 mkGameValidator :: Game -> GameDatum -> GameRedeemer -> ScriptContext -> Bool
 mkGameValidator game dat red ctx =
     traceIfFalse "token missing from input" (assetClassValueOf (txOutValue ownInput) (gToken game) == 1) &&
     case (dat, red) of
         (GameDatum bs Nothing, Play c) ->
-            traceIfFalse "not signed by second player"   (txSignedBy info (unPaymentPubKeyHash $ gSecond game))             &&
-            traceIfFalse "first player's stake missing"  (lovelaces (txOutValue ownInput) == gStake game)                   &&
-            traceIfFalse "second player's stake missing" (lovelaces (txOutValue ownOutput) == (2 * gStake game))            &&
-            traceIfFalse "wrong output datum"            (outputDatum == GameDatum bs (Just c))                             &&
-            traceIfFalse "missed deadline"               (to (gPlayDeadline game) `contains` txInfoValidRange info)         &&
-            traceIfFalse "token missing from output"     (assetClassValueOf (txOutValue ownOutput) (gToken game) == 1)
+            traceIfFalse "not signed by second player"       (txSignedBy info (unPaymentPubKeyHash $ gSecond game))                    &&
+            traceIfFalse "first player's stake missing"      (lovelaces (txOutValue ownInput) == gStake game + player1Deposit)         && 
+            traceIfFalse "second player's stake missing"     (lovelaces (txOutValue ownOutput) == (2 * gStake game + player1Deposit))  &&
+            traceIfFalse "wrong output datum"                (outputDatum == GameDatum bs (Just c))                                    &&
+            traceIfFalse "missed deadline"                   (to (gPlayDeadline game) `contains` txInfoValidRange info)                &&
+            traceIfFalse "token missing from output"         (assetClassValueOf (txOutValue ownOutput) (gToken game) == 1)
 
         (GameDatum bs (Just c), Reveal nonce) ->
-            traceIfFalse "not signed by first player"    (txSignedBy info (unPaymentPubKeyHash $ gFirst game))              &&
-            traceIfFalse "commit mismatch"               (checkNonce bs nonce c)                                            &&
-            traceIfFalse "missed deadline"               (to (gRevealDeadline game) `contains` txInfoValidRange info)       &&
-            traceIfFalse "wrong stake"                   (lovelaces (txOutValue ownInput) == (2 * gStake game))             &&
-            traceIfFalse "NFT must go to first player"   nftToFirst
+            traceIfFalse "not signed by first player"        (txSignedBy info (unPaymentPubKeyHash $ gFirst game))                     &&
+            traceIfFalse "commit mismatch"                   (checkNonce bs nonce c)                                                   &&
+            traceIfFalse "missed deadline"                   (to (gRevealDeadline game) `contains` txInfoValidRange info)              &&
+            traceIfFalse "wrong stake"                       (lovelaces (txOutValue ownInput) == (2 * gStake game + player1Deposit))   &&
+            traceIfFalse "NFT must go to first player"       nftToFirst                                                                &&
+            traceIfFalse "Player1 must get back the deposit" player1DepositBack 
 
+        -- Here we mustn't set player1Deposit constraint. 
+        -- If we did it and player1 didn't put the deposit at the beginning, the funds would block forever in the validator.    
         (GameDatum _ Nothing, ClaimFirst) ->
-            traceIfFalse "not signed by first player"    (txSignedBy info (unPaymentPubKeyHash $ gFirst game))              &&
-            traceIfFalse "too early"                     (from (1 + gPlayDeadline game) `contains` txInfoValidRange info)   &&
-            traceIfFalse "first player's stake missing"  (lovelaces (txOutValue ownInput) == gStake game)                   &&
-            traceIfFalse "NFT must go to first player"   nftToFirst
+            traceIfFalse "not signed by first player"        (txSignedBy info (unPaymentPubKeyHash $ gFirst game))                     &&
+            traceIfFalse "too early"                         (from (1 + gPlayDeadline game) `contains` txInfoValidRange info)          &&
+            traceIfFalse "first player's stake missing"      (lovelaces (txOutValue ownInput) == gStake game)                          &&  
+            traceIfFalse "NFT must go to first player"       nftToFirst                                                               
 
         (GameDatum _ (Just _), ClaimSecond) ->
-            traceIfFalse "not signed by second player"   (txSignedBy info (unPaymentPubKeyHash $ gSecond game))             &&
-            traceIfFalse "too early"                     (from (1 + gRevealDeadline game) `contains` txInfoValidRange info) &&
-            traceIfFalse "wrong stake"                   (lovelaces (txOutValue ownInput) == (2 * gStake game))             &&
-            traceIfFalse "NFT must go to first player"   nftToFirst
+            traceIfFalse "not signed by second player"       (txSignedBy info (unPaymentPubKeyHash $ gSecond game))                    &&
+            traceIfFalse "too early"                         (from (1 + gRevealDeadline game) `contains` txInfoValidRange info)        &&
+            traceIfFalse "wrong stake"                       (lovelaces (txOutValue ownInput) == (2 * gStake game + player1Deposit))   &&
+            traceIfFalse "NFT must go to first player"       nftToFirst                                                                &&
+            traceIfFalse "Player1 must get back the deposit" player1DepositBack 
 
         _ -> False
   where
@@ -145,6 +154,9 @@ mkGameValidator game dat red ctx =
 
     nftToFirst :: Bool
     nftToFirst = assetClassValueOf (valuePaidTo info $ unPaymentPubKeyHash $ gFirst game) (gToken game) == 1
+
+    player1DepositBack :: Bool
+    player1DepositBack = valuePaidTo info (unPaymentPubKeyHash $ gFirst game) `geq` Ada.lovelaceValueOf player1Deposit
 
 data Gaming
 instance Scripts.ValidatorTypes Gaming where
@@ -206,9 +218,8 @@ firstGame fp = do
             , gRevealDeadline = fpRevealDeadline fp
             , gToken          = AssetClass (fpCurrency fp, fpTokenName fp)
             }
-        v    = lovelaceValueOf (fpStake fp) <> assetClassValue (gToken game) 1
+        v    = lovelaceValueOf (fpStake fp) <> assetClassValue (gToken game) 1 <> Ada.lovelaceValueOf player1Deposit
         c    = fpChoice fp
-        -- bs   = sha2_256 $ fpNonce fp `appendByteString` if c == Zero then bsZero else bsOne
         bs   = sha2_256 $ fpNonce fp `appendByteString` choiceToBuiltinByteString c
         tx   = Constraints.mustPayToTheScript (GameDatum bs Nothing) v
     ledgerTx <- submitTxConstraints (typedGameValidator game) tx
@@ -272,7 +283,7 @@ secondGame sp = do
             logInfo @String "running game found"
             now <- currentTime
             let token   = assetClassValue (gToken game) 1
-            let v       = let x = lovelaceValueOf (spStake sp) in x <> x <> token
+            let v       = let x = lovelaceValueOf (spStake sp) in x <> x <> token <> Ada.lovelaceValueOf player1Deposit
                 c       = spChoice sp
                 lookups = Constraints.unspentOutputs (Map.singleton oref o)                                   <>
                           Constraints.otherScript (gameValidator game)                                        <>
@@ -297,7 +308,7 @@ secondGame sp = do
                                    Constraints.otherScript (gameValidator game)
                         tx'      = Constraints.mustSpendScriptOutput oref' (Redeemer $ PlutusTx.toBuiltinData ClaimSecond) <>
                                    Constraints.mustValidateIn (from now')                                                  <>
-                                   Constraints.mustPayToPubKey (spFirst sp) (token <> adaValueOf (getAda minAdaTxOut))
+                                   Constraints.mustPayToPubKey (spFirst sp) (token <> Ada.lovelaceValueOf player1Deposit)
                     ledgerTx' <- submitTxConstraintsWith @Gaming lookups' tx'
                     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx'
                     logInfo @String "second player won"

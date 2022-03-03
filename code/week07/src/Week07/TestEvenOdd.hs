@@ -27,9 +27,9 @@ import           PlutusTx.Prelude
 import           Prelude                    (IO, Show (..))
 import           Wallet.Emulator.Wallet
 
-import           Week07.EvenOddOriginal
+-- import           Week07.EvenOddOriginal
 -- import           Week07.EvenOddAlternative1
--- import           Week07.EvenOdd
+import           Week07.EvenOdd
 
 test :: IO ()
 test = do
