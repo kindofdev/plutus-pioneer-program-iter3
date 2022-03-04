@@ -11,12 +11,15 @@ License-files:       LICENSE
 library
   hs-source-dirs:      src
   exposed-modules:     Week07.EvenOdd
-                     , Week07.StateMachineOriginal
-                     , Week07.StateMachine
                      , Week07.TestEvenOdd
-                     , Week07.TestStateMachine
-                     , Week07.EvenOddOriginal
                      , Week07.EvenOddAlternative1
+                     , Week07.EvenOddOriginal
+                     , Week07.StateMachine
+                     , Week07.StateMachineOriginal
+                     , Week07.TestStateMachine
+                     , Week07.RockPaperScissors
+                     , Week07.TestRockPaperScissors
+
   build-depends:       aeson
                      , base ^>=4.14.1.0
                      , containers
