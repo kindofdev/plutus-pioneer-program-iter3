@@ -11,7 +11,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 
-module Week07.StateMachine
+module Week07.StateMachineOriginal
     ( Game (..)
     , GameChoice (..)
     , FirstParams (..)
@@ -121,35 +121,39 @@ final Finished = True
 final _        = False
 
 {-# INLINABLE check #-}
-check :: GameDatum -> GameRedeemer -> ScriptContext -> Bool
-check (GameDatum bs (Just c)) (Reveal nonce) _ =
-    sha2_256 (nonce `appendByteString` choiceToBuiltinByteString c) == bs
-check _                       _              _ = True
+check :: BuiltinByteString -> BuiltinByteString -> GameDatum -> GameRedeemer -> ScriptContext -> Bool
+check bsZero' bsOne' (GameDatum bs (Just c)) (Reveal nonce) _ =
+    sha2_256 (nonce `appendByteString` if c == Zero then bsZero' else bsOne') == bs
+check _       _      _                       _              _ = True
 
 {-# INLINABLE gameStateMachine #-}
-gameStateMachine :: Game -> StateMachine GameDatum GameRedeemer
-gameStateMachine game = StateMachine
+gameStateMachine :: Game -> BuiltinByteString -> BuiltinByteString -> StateMachine GameDatum GameRedeemer
+gameStateMachine game bsZero' bsOne' = StateMachine
     { smTransition  = transition game
     , smFinal       = final
-    , smCheck       = check
+    , smCheck       = check bsZero' bsOne'
     , smThreadToken = Just $ gToken game
     }
 
 {-# INLINABLE mkGameValidator #-}
-mkGameValidator :: Game -> GameDatum -> GameRedeemer -> ScriptContext -> Bool
-mkGameValidator game = mkValidator $ gameStateMachine game 
-
-{-# INLINABLE choiceToBuiltinByteString #-}
-choiceToBuiltinByteString :: GameChoice -> BuiltinByteString
-choiceToBuiltinByteString Zero = "0"
-choiceToBuiltinByteString One  = "1"
+mkGameValidator :: Game -> BuiltinByteString -> BuiltinByteString -> GameDatum -> GameRedeemer -> ScriptContext -> Bool
+mkGameValidator game bsZero' bsOne' = mkValidator $ gameStateMachine game bsZero' bsOne'
 
 type Gaming = StateMachine GameDatum GameRedeemer
+
+bsZero, bsOne :: BuiltinByteString
+bsZero = "0"
+bsOne  = "1"
+
+gameStateMachine' :: Game -> StateMachine GameDatum GameRedeemer
+gameStateMachine' game = gameStateMachine game bsZero bsOne
 
 typedGameValidator :: Game -> Scripts.TypedValidator Gaming
 typedGameValidator game = Scripts.mkTypedValidator @Gaming
     ($$(PlutusTx.compile [|| mkGameValidator ||])
-        `PlutusTx.applyCode` PlutusTx.liftCode game)
+        `PlutusTx.applyCode` PlutusTx.liftCode game
+        `PlutusTx.applyCode` PlutusTx.liftCode bsZero
+        `PlutusTx.applyCode` PlutusTx.liftCode bsOne)
     $$(PlutusTx.compile [|| wrap ||])
   where
     wrap = Scripts.wrapValidator @GameDatum @GameRedeemer
@@ -161,7 +165,7 @@ gameAddress :: Game -> Ledger.Address
 gameAddress = scriptAddress . gameValidator
 
 gameClient :: Game -> StateMachineClient GameDatum GameRedeemer
-gameClient game = mkStateMachineClient $ StateMachineInstance (gameStateMachine game) (typedGameValidator game)
+gameClient game = mkStateMachineClient $ StateMachineInstance (gameStateMachine' game) (typedGameValidator game)
 
 data FirstParams = FirstParams
     { fpSecond         :: !PaymentPubKeyHash
@@ -193,7 +197,7 @@ firstGame fp = do
         client = gameClient game
         v      = lovelaceValueOf (fpStake fp)
         c      = fpChoice fp
-        bs     = sha2_256 $ fpNonce fp `appendByteString` choiceToBuiltinByteString c
+        bs     = sha2_256 $ fpNonce fp `appendByteString` if c == Zero then bsZero else bsOne
     void $ mapError' $ runInitialise client (GameDatum bs Nothing) v
     logInfo @String $ "made first move: " ++ show (fpChoice fp)
     tell $ Last $ Just tt

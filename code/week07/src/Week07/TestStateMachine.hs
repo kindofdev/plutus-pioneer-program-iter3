@@ -23,6 +23,7 @@ import           PlutusTx.Prelude
 import           Prelude                    (IO, Show (..))
 import           Wallet.Emulator.Wallet
 
+-- import           Week07.StateMachineOriginal
 import           Week07.StateMachine
 
 test :: IO ()

@@ -11,6 +11,7 @@ License-files:       LICENSE
 library
   hs-source-dirs:      src
   exposed-modules:     Week07.EvenOdd
+                     , Week07.StateMachineOriginal
                      , Week07.StateMachine
                      , Week07.TestEvenOdd
                      , Week07.TestStateMachine
