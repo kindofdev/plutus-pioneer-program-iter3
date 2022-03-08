@@ -11,16 +11,19 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE ImportQualifiedPost   #-}
 
-module Week07.RockPaperScissors
+module Week07.RPS.RockPaperScissors
     ( Game (..)
     , GameChoice (..)
     , FirstParams (..)
     , SecondParams (..)
     , GameSchema
     , Last (..)
-    , ThreadToken
+    , ThreadToken 
     , Text
+    , firstGame
+    , secondGame
     , endpoints
     ) where
 
@@ -34,17 +37,22 @@ import           Ledger.Ada                   as Ada
 import           Ledger.Constraints           as Constraints
 import           Ledger.Typed.Tx
 import qualified Ledger.Typed.Scripts         as Scripts
-import           Plutus.Contract              as Contract
+import Plutus.Contract as Contract
 import           Plutus.Contract.StateMachine
 import qualified PlutusTx
 import           PlutusTx.Prelude             hiding (Semigroup(..), check, unless)
-import           Playground.Contract          (ToSchema)
+import           Data.OpenApi.Schema          (ToSchema)
 import           Prelude                      (Semigroup (..), Show (..), String)
 import qualified Prelude
 
+import qualified Data.Map as Map
+
+
 data Game = Game
-    { gFirst          :: !PaymentPubKeyHash
-    , gSecond         :: !PaymentPubKeyHash
+    { gFirstPpkh      :: !PaymentPubKeyHash
+    , gFirstSpkh      :: !(Maybe StakePubKeyHash)
+    , gSecondPpkh     :: !PaymentPubKeyHash
+    , gSecondSpkh     :: !(Maybe StakePubKeyHash)
     , gStake          :: !Integer
     , gPlayDeadline   :: !POSIXTime
     , gRevealDeadline :: !POSIXTime
@@ -54,7 +62,7 @@ data Game = Game
 PlutusTx.makeLift ''Game
 
 data GameChoice = Rock | Paper | Scissors
-    deriving (Show, Generic, FromJSON, ToJSON, ToSchema, Prelude.Eq, Prelude.Ord)
+    deriving (Show, Generic, FromJSON, ToJSON, ToSchema, Prelude.Eq, Prelude.Ord, Prelude.Read)
 
 instance Eq GameChoice where
     {-# INLINABLE (==) #-}
@@ -103,35 +111,46 @@ gameDatum o f = do
 transition :: Game -> State GameDatum -> GameRedeemer -> Maybe (TxConstraints Void Void, State GameDatum)
 transition Game{..} s r = case (stateValue s, stateData s, r) of
     (v, GameDatum bs Nothing, Play c2)
-        | lovelaces v == gStake              -> Just ( Constraints.mustBeSignedBy gSecond                               <>
-                                                       Constraints.mustValidateIn (to gPlayDeadline)
-                                                     , State (GameDatum bs $ Just c2) (lovelaceValueOf $ 2 * gStake)
-                                                     )
+        | lovelaces v == gStake             -> Just ( Constraints.mustBeSignedBy gSecondPpkh                        <>
+                                                      Constraints.mustValidateIn (to gPlayDeadline)
+                                                    , State (GameDatum bs $ Just c2) (lovelaceValueOf $ 2 * gStake)
+                                                    )
     (v, GameDatum _ (Just c2), Reveal _ c1)
         | lovelaces v == (2 * gStake ) &&
-          c1 `beats` c2                      -> Just ( Constraints.mustBeSignedBy gFirst                                <>
-                                                       Constraints.mustValidateIn (to gRevealDeadline)      
-                                                     , State Finished mempty
-                                                     )
+          c1 `beats` c2                     -> Just ( Constraints.mustBeSignedBy gFirstPpkh                         <>
+                                                      Constraints.mustValidateIn (to gRevealDeadline)               <>
+                                                      mustPayTx gFirstPpkh gFirstSpkh v
+                                                    , State Finished mempty
+                                                    )
     (v, GameDatum _ (Just c2), Reveal _ c1)
         | lovelaces v == (2 * gStake ) &&
-          c1 == c2                           -> Just ( Constraints.mustBeSignedBy gFirst                                <>
-                                                       Constraints.mustValidateIn (to gRevealDeadline)                  <>
-                                                       Constraints.mustPayToPubKey gFirst (Ada.lovelaceValueOf gStake)  <>
-                                                       Constraints.mustPayToPubKey gSecond (Ada.lovelaceValueOf gStake) 
-                                                     , State Finished mempty
-                                                     )                                                 
+          c1 == c2                          -> Just ( Constraints.mustBeSignedBy gFirstPpkh                         <>
+                                                      Constraints.mustValidateIn (to gRevealDeadline)               <>
+                                                      mustPayTx gFirstPpkh gFirstSpkh (lovelaceValueOf gStake)      <>
+                                                      mustPayTx gSecondPpkh gSecondSpkh (lovelaceValueOf gStake)
+                                                    , State Finished mempty
+                                                    )                                                 
     (v, GameDatum _ Nothing, ClaimFirst)
-        | lovelaces v == gStake              -> Just ( Constraints.mustBeSignedBy gFirst                                <>
-                                                       Constraints.mustValidateIn (from $ 1 + gPlayDeadline)
-                                                     , State Finished mempty
-                                                     )
+        | lovelaces v == gStake             -> Just ( Constraints.mustBeSignedBy gFirstPpkh                         <>
+                                                      Constraints.mustValidateIn (from $ 1 + gPlayDeadline)         <>
+                                                      mustPayTx gFirstPpkh gFirstSpkh v
+                                                    , State Finished mempty
+                                                    )
     (v, GameDatum _ (Just _), ClaimSecond)
-        | lovelaces v == (2 * gStake )       -> Just ( Constraints.mustBeSignedBy gSecond                               <>
-                                                       Constraints.mustValidateIn (from $ 1 + gRevealDeadline)
-                                                     , State Finished mempty
-                                                     )
-    _                                        -> Nothing
+        | lovelaces v == (2 * gStake )      -> Just ( Constraints.mustBeSignedBy gSecondPpkh                        <>
+                                                      Constraints.mustValidateIn (from $ 1 + gRevealDeadline)       <>
+                                                      mustPayTx gSecondPpkh gSecondSpkh v
+                                                    , State Finished mempty
+                                                    )
+    _                                       -> Nothing
+      
+
+{-# INLINABLE mustPayTx #-}
+mustPayTx :: PaymentPubKeyHash -> Maybe StakePubKeyHash -> Value -> TxConstraints i o
+mustPayTx ppkh mSpkh v = case mSpkh of 
+    Nothing   -> Constraints.mustPayToPubKey ppkh v
+    Just spkh -> Constraints.mustPayToPubKeyAddress ppkh spkh v
+
 
 {-# INLINABLE final #-}
 final :: GameDatum -> Bool
@@ -183,41 +202,64 @@ gameClient :: Game -> StateMachineClient GameDatum GameRedeemer
 gameClient game = mkStateMachineClient $ StateMachineInstance (gameStateMachine game) (typedGameValidator game)
 
 data FirstParams = FirstParams
-    { fpSecond         :: !PaymentPubKeyHash
+    { fpFirstPpkh      :: !PaymentPubKeyHash
+    , fpFirstSpkh      :: !(Maybe StakePubKeyHash)
+    , fpSecondPpkh     :: !PaymentPubKeyHash
+    , fpSecondSpkh     :: !(Maybe StakePubKeyHash)
     , fpStake          :: !Integer
     , fpPlayDeadline   :: !POSIXTime
     , fpRevealDeadline :: !POSIXTime
     , fpNonce          :: !BuiltinByteString
     , fpChoice         :: !GameChoice
-    } deriving (Show, Generic, FromJSON, ToJSON, ToSchema)
+    } deriving (Prelude.Eq, Prelude.Ord, Show, Generic, FromJSON, ToJSON, ToSchema)
 
 mapError' :: Contract w s SMContractError a -> Contract w s Text a
 mapError' = mapError $ pack . show
 
 waitUntilTimeHasPassed :: AsContractError e => POSIXTime -> Contract w s e ()
-waitUntilTimeHasPassed t = void $ awaitTime t >> waitNSlots 1
+waitUntilTimeHasPassed t = do
+    now <- currentTime
+    logDebug @String $ "time: " <> show now  
+    nowSlot <- currentSlot 
+    logDebug @String $ "slot: " <> show nowSlot 
+
+    t'  <- awaitTime t  
+    logDebug @String $ "time after deadline: " <> show t'
+    nowSlot' <- currentSlot 
+    logDebug @String $ "slot after deadline:" <> show nowSlot' 
+
+    void $ waitNSlots 1
 
 firstGame :: forall s. FirstParams -> Contract (Last ThreadToken) s Text ()
-firstGame fp = do
-    pkh <- Contract.ownPaymentPubKeyHash
-    tt  <- mapError' getThreadToken
-    let game   = Game
-            { gFirst          = pkh
-            , gSecond         = fpSecond fp
-            , gStake          = fpStake fp
-            , gPlayDeadline   = fpPlayDeadline fp
-            , gRevealDeadline = fpRevealDeadline fp
+firstGame FirstParams{..} = do
+    tt        <- mapError' getThreadToken
+    logInfo @String $ "tt to be mint: " <> show tt
+    
+    let ttUtxoRef = ttOutRef tt
+    ttUtxoMap <- txOutFromRef ttUtxoRef >>= maybe (throwError "utxo not found") (return . Map.singleton ttUtxoRef) 
+
+    let game = Game
+            { gFirstPpkh      = fpFirstPpkh
+            , gFirstSpkh      = fpFirstSpkh
+            , gSecondPpkh     = fpSecondPpkh
+            , gSecondSpkh     = fpSecondSpkh
+            , gStake          = fpStake
+            , gPlayDeadline   = fpPlayDeadline
+            , gRevealDeadline = fpRevealDeadline
             , gToken          = tt
             }
-        client = gameClient game
-        v      = lovelaceValueOf (fpStake fp)
-        c1     = fpChoice fp
-        bs     = sha2_256 $ fpNonce fp `appendByteString` choiceToBuiltinByteString c1
-    void $ mapError' $ runInitialise client (GameDatum bs Nothing) v
-    logInfo @String $ "made first move: " ++ show (fpChoice fp)
+        client      = gameClient game
+        v           = lovelaceValueOf fpStake
+        c1          = fpChoice 
+        bs          = sha2_256 $ fpNonce `appendByteString` choiceToBuiltinByteString c1       
+        initLookups = Constraints.unspentOutputs ttUtxoMap
+        
+    void $ mapError' $ runInitialiseWith initLookups mempty client (GameDatum bs Nothing) v
+
+    logInfo @String $ "made first move: " ++ show c1
     tell $ Last $ Just tt
 
-    waitUntilTimeHasPassed $ fpPlayDeadline fp
+    waitUntilTimeHasPassed fpPlayDeadline 
 
     m <- mapError' $ getOnChainState client
     case m of
@@ -231,57 +273,61 @@ firstGame fp = do
 
             GameDatum _ (Just c2) | c1 `beats` c2 -> do
                 logInfo @String "second player played and lost"
-                void $ mapError' $ runStep client $ Reveal (fpNonce fp) c1
+                void $ mapError' $ runStep client $ Reveal fpNonce c1
                 logInfo @String "first player revealed and won"
 
             GameDatum _ (Just c2) | c1 == c2 -> do
-                logInfo @String "first player and second player draws"
-                void $ mapError' $ runStep client $ Reveal (fpNonce fp) c1
+                logInfo @String "first player and second player draw"
+                void $ mapError' $ runStep client $ Reveal fpNonce c1
                 logInfo @String "first player revealed and draw"
 
             _ -> logInfo @String "second player played and won"
 
 data SecondParams = SecondParams
-    { spFirst          :: !PaymentPubKeyHash
+    { spFirstPpkh      :: !PaymentPubKeyHash
+    , spFirstSpkh      :: !(Maybe StakePubKeyHash)
+    , spSecondPpkh     :: !PaymentPubKeyHash
+    , spSecondSpkh     :: !(Maybe StakePubKeyHash)
     , spStake          :: !Integer
     , spPlayDeadline   :: !POSIXTime
     , spRevealDeadline :: !POSIXTime
     , spChoice         :: !GameChoice
     , spToken          :: !ThreadToken
-    } deriving (Show, Generic, FromJSON, ToJSON)
+    } deriving (Prelude.Eq, Prelude.Ord, Show, Generic, FromJSON, ToJSON, ToSchema)
 
 secondGame :: forall w s. SecondParams -> Contract w s Text ()
-secondGame sp = do
-    pkh <- Contract.ownPaymentPubKeyHash
-    let game   = Game
-            { gFirst          = spFirst sp
-            , gSecond         = pkh
-            , gStake          = spStake sp
-            , gPlayDeadline   = spPlayDeadline sp
-            , gRevealDeadline = spRevealDeadline sp
-            , gToken          = spToken sp
+secondGame SecondParams{..} = do
+    let game = Game
+            { gFirstPpkh      = spFirstPpkh
+            , gFirstSpkh      = spFirstSpkh
+            , gSecondPpkh     = spSecondPpkh
+            , gSecondSpkh     = spSecondSpkh
+            , gStake          = spStake 
+            , gPlayDeadline   = spPlayDeadline
+            , gRevealDeadline = spRevealDeadline
+            , gToken          = spToken
             }
         client = gameClient game
     m <- mapError' $ getOnChainState client
     case m of
-        Nothing          -> logInfo @String "no running game found"
+        Nothing     -> logInfo @String "no running game found"
         Just (o, _) -> case tyTxOutData $ ocsTxOut o of
             GameDatum _ Nothing -> do
                 logInfo @String "running game found"
-                void $ mapError' $ runStep client $ Play $ spChoice sp
-                logInfo @String $ "made second move: " ++ show (spChoice sp)
+                void $ mapError' $ runStep client $ Play spChoice 
+                logInfo @String $ "made second move: " ++ show spChoice
 
-                waitUntilTimeHasPassed $ spRevealDeadline sp
+                waitUntilTimeHasPassed spRevealDeadline
 
                 m' <- mapError' $ getOnChainState client
                 case m' of
-                    Nothing -> logInfo @String "first player won"
+                    Nothing -> logInfo @String "first player won or draw"
                     Just _  -> do
                         logInfo @String "first player didn't reveal"
                         void $ mapError' $ runStep client ClaimSecond
                         logInfo @String "second player won"
 
-            _ -> throwError "unexpected datum"
+            _                   -> throwError "unexpected datum"
 
 type GameSchema = Endpoint "first" FirstParams .\/ Endpoint "second" SecondParams
 

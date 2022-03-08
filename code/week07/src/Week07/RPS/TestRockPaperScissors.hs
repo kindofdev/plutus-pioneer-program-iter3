@@ -8,7 +8,7 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module Week07.TestRockPaperScissors
+module Week07.RPS.TestRockPaperScissors
     ( test
     , test'
     , GameChoice (..)
@@ -23,7 +23,9 @@ import           PlutusTx.Prelude
 import           Prelude                    (IO, Show (..))
 import           Wallet.Emulator.Wallet
 
-import           Week07.RockPaperScissors
+import           Week07.RPS.RockPaperScissors
+
+import Week07.RPS.Utils
 
 test :: IO ()
 test = do
@@ -47,14 +49,17 @@ myTrace c1 c2 = do
     h1 <- activateContractWallet w1 endpoints
     h2 <- activateContractWallet w2 endpoints
 
-    let pkh1      = mockWalletPaymentPubKeyHash w1
-        pkh2      = mockWalletPaymentPubKeyHash w2
+    let (ppkh1, spkh1) = unsafeCredentials (mockWalletAddress w1)
+        (ppkh2, spkh2) = unsafeCredentials (mockWalletAddress w2)
         stake     = 5_000_000
         deadline1 = slotToEndPOSIXTime def 5
         deadline2 = slotToEndPOSIXTime def 10
 
         fp = FirstParams
-                { fpSecond         = pkh2
+                { fpFirstPpkh      = ppkh1
+                , fpFirstSpkh      = spkh1
+                , fpSecondPpkh     = ppkh2
+                , fpSecondSpkh     = spkh2
                 , fpStake          = stake
                 , fpPlayDeadline   = deadline1
                 , fpRevealDeadline = deadline2
@@ -67,7 +72,10 @@ myTrace c1 c2 = do
     tt <- getTT h1
 
     let sp = SecondParams
-                { spFirst          = pkh1
+                { spFirstPpkh      = ppkh1
+                , spFirstSpkh      = spkh1
+                , spSecondPpkh     = ppkh2
+                , spSecondSpkh     = spkh2
                 , spStake          = stake
                 , spPlayDeadline   = deadline1
                 , spRevealDeadline = deadline2
