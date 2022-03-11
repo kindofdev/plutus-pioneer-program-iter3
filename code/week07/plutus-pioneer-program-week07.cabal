@@ -16,6 +16,10 @@ library
                      , Week07.EvenOddOriginal
                      , Week07.StateMachine
                      , Week07.StateMachineOriginal
+                     , Week07.RockPaperScissors
+                     , Week07.StateMachine
+                     , Week07.TestEvenOdd
+                     , Week07.TestRockPaperScissors
                      , Week07.TestStateMachine
                      , Week07.RPS.RockPaperScissors
                      , Week07.RPS.TestRockPaperScissors

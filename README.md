@@ -65,6 +65,17 @@
  - [Part 4 - State Machines](https://youtu.be/7jiaQRA-wKI)
  - [Part 5 - Homework](https://youtu.be/J0rD_hmsMVo)
 
+### [Lecture #8](https://www.youtube.com/playlist?list=PLNEK_Ejlx3x0UIixvEQG2Y2mmFL6__pEJ)
+
+ - [Part 1 - Introduction](https://youtu.be/mqHifIPefus)
+ - [Part 2 - Another State Machine Example: Token Sale](https://youtu.be/y5O58-NpnJ4)
+ - [Part 3 - Automatic Testing using Emulator Traces](https://youtu.be/LG9O8YbBXyM)
+ - [Part 4 - Test Coverage](https://youtu.be/wJQnQtLxi2E)
+ - [Part 5 - Interlude: Optics](https://youtu.be/naLA0OMIF1Q)
+ - [Part 6 - Property-Based Testing with QuickCheck](https://youtu.be/9mrYT9UXLO8)
+ - [Part 7 - Property-Based Testing of Plutus Contracts](https://youtu.be/49oAwySp6Ys)
+ - [Part 8 - Homework](https://youtu.be/u2Plwc3Gkrs)
+
 ## Code Examples
 
  - Lecture #1: [English Auction](code/week01)
@@ -74,6 +85,7 @@
  - Lecture #5: [Native Tokens](code/week05)
  - Lecture #6: [Deployment](code/week06)
  - Lecture #7: [State Machines](code/week07)
+ - Lecture #8: [Testing](code/week08)
 
 ## Exercises
 
@@ -124,12 +136,19 @@
 - Week #7
   - Implement the game of "Rock, Paper, Scissors" using state machines.
 
+- Week #8
+
+  - Add a new operation close to the TokenSale-contract that allows the seller to close the contract and retrieve all remaining funds.
+  - Modify the tests accordingly.
+
 ## Some Plutus Modules
 
   - `Ledger.Scripts`, contains functions related to untyped Plutus scripts.
   - `Ledger.Typed.Scripts`, contains functions related to typed Plutus scripts.
   - `Plutus.Contract`, contains definitions and functions for writing offchain code.
   - `Plutus.Contract.StateMachine`, contains definitions and functions for working with _state machines_.
+  - `Plutus.Contract.Test`, contains support for automatic tests.
+  - `Plutus.Contract.Test.ContractModel`, contains support for automatic property-based tests using `QuickCheck`.
   - `Plutus.V1.Ledger.Ada`, contains definitions and functions related to _ADA_-values.
   - `Plutus.V1.Ledger.Interval`, contains the definition of intervals and functions for working with them.
   - `Plutus.V1.Ledger.Value`, contains definitions and functions related to _values_.
