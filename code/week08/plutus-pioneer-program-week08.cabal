@@ -15,6 +15,7 @@ library
                      , Week08.QuickCheck
                      , Week08.TokenSale
                      , Week08.TokenSaleFixed
+                     , Week08.TokenSaleClosable
   build-depends:       aeson
                      , ansi-terminal
                      , base ^>=4.14.1.0
@@ -37,10 +38,13 @@ library
 
 test-suite plutus-pioneer-program-week08-tests
   type: exitcode-stdio-1.0
-  main-is: Spec.hs
+  main-is: SpecClosable.hs
+  -- main-is: Spec.hs
   hs-source-dirs: test
   other-modules:       Spec.Model
                      , Spec.Trace
+                     , Spec.ModelClosable
+                     , Spec.TraceClosable
   default-language: Haskell2010
   ghc-options:         -Wall -fobject-code -fno-ignore-interface-pragmas -fno-omit-interface-pragmas
   build-depends:       base ^>=4.14.1.0
