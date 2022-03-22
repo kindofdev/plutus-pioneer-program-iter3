@@ -76,6 +76,15 @@
  - [Part 7 - Property-Based Testing of Plutus Contracts](https://youtu.be/49oAwySp6Ys)
  - [Part 8 - Homework](https://youtu.be/u2Plwc3Gkrs)
 
+### [Lecture #9](https://www.youtube.com/playlist?list=PLNEK_Ejlx3x2zSFnzWA4Gbr_AVTz-4rzf)
+
+ - [Part 1 - Introduction](https://youtu.be/433VbouC-30)
+ - [Part 2 - Simon Thompson: Marlowe Overview](https://youtu.be/ce_Yv8BlW7c)
+ - [Part 3 - Alexander Nemish: Marlowe in Plutus](https://youtu.be/hd-E5DCN8uc)
+ - [Part 4 - Brian Bush: The Marlowe CLI](https://youtu.be/Vx_ygegrY78)
+ - [Part 5 - Marlowe Playground Demo](https://youtu.be/l0LXjh8J-go)
+ - [Part 6 - Homework](https://youtu.be/iYdyUaq_enA)
+
 ## Code Examples
 
  - Lecture #1: [English Auction](code/week01)
@@ -86,6 +95,7 @@
  - Lecture #6: [Deployment](code/week06)
  - Lecture #7: [State Machines](code/week07)
  - Lecture #8: [Testing](code/week08)
+ - Lecture #9: [Marlowe](code/week09)
 
 ## Exercises
 
@@ -140,6 +150,10 @@
 
   - Add a new operation close to the TokenSale-contract that allows the seller to close the contract and retrieve all remaining funds.
   - Modify the tests accordingly.
+
+- Week #9m
+
+  - Modify the example Marlowe contract, so that Charlie must put down twice the deposit in the very beginning, which gets split between Alice and Bob if Charlie refuses to make his choice.
 
 ## Some Plutus Modules
 
